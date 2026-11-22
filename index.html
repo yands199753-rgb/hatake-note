@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#2f6b3a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="畑ノート">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>畑ノート</title>
 <style>
 :root{--bg:#f6f5f0;--card:#fff;--ink:#1f2a1f;--sub:#667064;--line:#dcdcd2;--accent:#2f6b3a;--accent-ink:#fff;--warn:#c0392b;--road:#f7b4b6}
@@ -17,7 +23,7 @@ header{position:sticky;top:0;z-index:10;background:var(--accent);color:var(--acc
 .bar h1{font-size:18px;margin:0}
 #today{font-size:12px;opacity:.85}
 nav{display:flex;gap:2px;padding:6px 8px 0}
-nav button{flex:1;max-width:140px;border:0;background:transparent;color:inherit;padding:9px 2px;font:inherit;font-size:14px;border-radius:10px 10px 0 0;opacity:.85;cursor:pointer;white-space:nowrap}
+nav button{flex:1;max-width:140px;border:0;background:transparent;color:inherit;padding:9px 0;font:inherit;font-size:13px;border-radius:10px 10px 0 0;opacity:.85;cursor:pointer;white-space:nowrap}
 nav button.on{background:var(--bg);color:var(--ink);opacity:1;font-weight:700}
 nav b{display:inline-block;min-width:18px;margin-left:4px;padding:0 5px;border-radius:9px;background:var(--warn);color:#fff;font-size:11px;line-height:18px}
 nav b:empty{display:none}
@@ -105,16 +111,45 @@ dialog::backdrop{background:#0008}
 .rotbox div+div{margin-top:4px}
 .rot li{margin:3px 0}
 ul.plain{margin:6px 0;padding-left:20px;font-size:14px}
+.syncchip{margin-left:auto;border:1px solid #fff6;background:#0002;color:#fff;border-radius:999px;font:inherit;font-size:12px;padding:2px 10px;cursor:pointer}
+.syncchip.err{background:var(--warn);border-color:var(--warn)}
+.card+.card{margin-top:12px}
+.fld{display:block;margin:0 0 10px;font-size:13px;color:var(--sub)}
+.fld input{display:block;width:100%;margin-top:3px;font:inherit;font-size:16px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+#sy-form{max-width:360px}
+.cropchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.chipbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer}
+.chipbtn.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chipbtn small{opacity:.75;margin-left:4px}
+.mwrap{overflow-x:auto;margin:6px 0 4px}
+.mtab{border-collapse:collapse;width:100%;font-size:12px}
+.mtab th,.mtab td{padding:3px 0;text-align:center;border:1px solid var(--line);min-width:20px;line-height:1.4}
+.mtab th.rl,.mtab td.rl{text-align:left;min-width:64px;padding:3px 5px;white-space:nowrap;position:sticky;left:0;background:var(--card)}
+.mtab th.cur{background:var(--bg);color:var(--ink)}
+.mtab .pl{opacity:.4}
+details.cult{border:1px solid var(--line);border-radius:12px;margin:10px 0;background:var(--card)}
+details.cult>summary{padding:10px 12px;cursor:pointer;list-style:none}
+details.cult>summary::-webkit-details-marker{display:none}
+details.cult>summary::before{content:'▸ ';color:var(--sub)}
+details.cult[open]>summary::before{content:'▾ '}
+details.cult .cbody{padding:0 12px 10px}
+.dd{font-size:12px;color:var(--sub)}
+.mtab .k1,.mtab .k2{display:inline-block;border-radius:4px;font-size:11px;line-height:16px;padding:0 3px;margin:0 1px;color:#1f2a1f}
+.mtab .k1{background:#f2e48f}.mtab .k2{background:#9bd7a8}
+.mtab td.rl small{color:var(--sub);margin-left:3px}
+.mtab.num td,.mtab.num th{min-width:30px;font-size:11px}
+.nowlist{font-size:14px;margin:4px 0}
 </style>
 </head>
 <body>
 <header>
-  <div class="bar"><h1>🥬 畑ノート</h1><span id="today"></span></div>
+  <div class="bar"><h1>🥬 畑ノート</h1><span id="today"></span><button type="button" id="syncChip" class="syncchip"></button></div>
   <nav id="tabs">
     <button data-v="map" class="on">畝マップ</button>
+    <button data-v="crop">作物別</button>
     <button data-v="log">記録</button>
     <button data-v="plan">予定<b id="planCount"></b></button>
-    <button data-v="rot">連作</button>
+    <button data-v="rot">目安</button>
     <button data-v="data">データ</button>
   </nav>
 </header>
@@ -148,12 +183,27 @@ ul.plain{margin:6px 0;padding-left:20px;font-size:14px}
   <section id="v-plan" class="view" hidden>
     <div id="p-list"></div>
   </section>
+  <section id="v-crop" class="view" hidden></section>
   <section id="v-rot" class="view" hidden></section>
   <section id="v-data" class="view" hidden>
+    <div class="card" id="sy-card">
+      <h2>同期（スマホとPC）</h2>
+      <p id="sy-status" class="sub"></p>
+      <form id="sy-form" hidden>
+        <label class="fld">メールアドレス<input type="email" id="sy-mail" autocomplete="username" inputmode="email"></label>
+        <label class="fld">パスワード<input type="password" id="sy-pass" autocomplete="current-password"></label>
+        <button type="submit" class="btn pri" id="sy-go">ログイン</button>
+      </form>
+      <div id="sy-on" class="quick" hidden>
+        <button type="button" class="btn pri" id="sy-now">今すぐ同期</button>
+        <button type="button" class="btn" id="sy-out">ログアウト</button>
+      </div>
+      <p class="note">記録・畝の形・写真が同期されます。ネットがつながらない場所でも入力でき、つながったときに自動で同期します。ログアウトしても、この端末のデータは消えません。</p>
+    </div>
     <div class="card">
       <h2>データ</h2>
       <p id="d-stat" class="sub"></p>
-      <p class="note">※ いまのデータは、この端末のこのブラウザの中だけに保存されます（端末間の同期は次の段階で追加します）。機種変更や履歴削除に備えて、ときどきバックアップを書き出してください。畝の形の変更も保存されます。</p>
+      <p class="note">※ バックアップは、ときどき書き出しておくと安心です。畝の形の変更も含まれます。</p>
       <div class="quick">
         <button class="btn pri" id="d-export">バックアップを書き出す</button>
         <label class="btn">バックアップを読み込む<input type="file" id="d-import" accept="application/json,.json" hidden></label>
@@ -181,8 +231,11 @@ ul.plain{margin:6px 0;padding-left:20px;font-size:14px}
     <fieldset><legend>対象の畝</legend><div id="f-beds" class="chips"></div></fieldset>
     <label data-t="plant harvest">作物<input type="text" id="f-crop" list="dl-crops" autocomplete="off"></label>
     <div id="f-rot" class="rotbox" hidden></div>
+    <div id="f-season" class="rotbox" hidden></div>
     <label data-t="plant">品種<input type="text" id="f-variety" autocomplete="off"></label>
+    <label data-t="plant">方法<select id="f-how"><option value="">（指定なし）</option><option value="播種">播種（種をまく）</option><option value="定植">定植（苗を植える）</option><option value="植え付け">植え付け（種芋・球根など）</option></select></label>
     <label data-t="plant">収穫予定日<input type="date" id="f-harvestPlan"></label>
+    <div data-t="plant" id="f-af-box"><label class="chk"><input type="checkbox" id="f-af"> 追肥の予定を自動で入れる（目安）</label><div id="f-afprev" class="note"></div></div>
     <label data-t="fert spray">資材名<input type="text" id="f-material" list="dl-mats" autocomplete="off"></label>
     <label data-t="fert harvest">量<input type="text" id="f-amount" placeholder="例: 100g/㎡、3kg" autocomplete="off"></label>
     <div class="row" data-t="spray">
@@ -210,8 +263,12 @@ ul.plain{margin:6px 0;padding-left:20px;font-size:14px}
 <datalist id="dl-crops"></datalist>
 <datalist id="dl-mats"></datalist>
 
+<script src="supabase.js"></script>
 <script>
 (()=>{'use strict';
+/* ---------- 同期の設定（公開用の値） ---------- */
+const SUPABASE_URL='https://dlxqghghtuowoanutklw.supabase.co';
+const SUPABASE_KEY='sb_publishable_xyH6VUhrmehKjlDTdpHaQQ_ylA45hEf';
 /* ---------- 畑の形（元図の座標。1m ≒ 40.3 単位） ---------- */
 const ROAD=[[705,373],[758,410],[1038,455],[1038,557],[669,501],[665,541],[609,558],[591,677],[562,680],[485,775],[415,862],[345,947],[329,1043],[299,975],[244,999],[225,959],[271,925],[290,900],[331,934],[473,757],[546,668],[603,521],[560,486],[686,403]];
 const DEFAULT_BEDS=[
@@ -233,7 +290,7 @@ const TYPES={
  plant:{label:'作付け',icon:'🌱'},fert:{label:'施肥',icon:'🧪'},spray:{label:'農薬散布',icon:'💧'},
  harvest:{label:'収穫',icon:'🧺'},clear:{label:'片付け',icon:'🧹'},memo:{label:'メモ',icon:'📝'}
 };
-const FIELDS=['crop','variety','harvestPlan','material','amount','dilution','target','phi','memo'];
+const FIELDS=['crop','variety','how','harvestPlan','material','amount','dilution','target','phi','memo'];
 
 /* ---------- 連作障害データ（f:科 / y:同じ科をあける年数の目安 / r:資料での幅） ---------- */
 const CROPS=[
@@ -310,7 +367,14 @@ const KEY='hatake-note-v1';
 let S={records:[],beds:null};
 try{const j=JSON.parse(localStorage.getItem(KEY)||'null');if(j&&Array.isArray(j.records))S=j}catch(e){}
 if(!Array.isArray(S.beds))S.beds=clone(DEFAULT_BEDS);
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+if(!S.tomb||typeof S.tomb!=='object')S.tomb={};   // 削除した記録（同期用）
+if(!S.up||typeof S.up!=='object')S.up={};         // アップロード済みの写真
+if(!Array.isArray(S.pdel))S.pdel=[];              // サーバーから消す写真
+if(typeof S.bu!=='number')S.bu=0;                 // 畝の形を変えた時刻
+{const t0=Date.now();for(const r of S.records)if(typeof r.u!=='number')r.u=t0;
+ if(!S.bu&&JSON.stringify(S.beds)!==JSON.stringify(DEFAULT_BEDS))S.bu=t0}
+const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const save=()=>{persist();schedSync()};
 const getBed=id=>S.beds.find(b=>b.id===id);
 const active=()=>S.beds.filter(b=>!b.retired);
 const bedLabel=id=>{const b=getBed(id);return id+(b&&b.retired?'（旧）':'')};
@@ -319,8 +383,16 @@ const bedLabel=id=>{const b=getBed(id);return id+(b&&b.retired?'（旧）':'')};
 const mem=new Map();let dbp=null;
 function idb(){if(!dbp)dbp=new Promise((res,rej)=>{try{const r=indexedDB.open('hatake-photos',1);r.onupgradeneeded=()=>r.result.createObjectStore('p');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}});return dbp}
 async function putPhoto(id,blob){mem.set(id,blob);try{const db=await idb();await new Promise((res,rej)=>{const tx=db.transaction('p','readwrite');tx.objectStore('p').put(blob,id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}catch(e){}}
-async function getPhoto(id){if(mem.has(id))return mem.get(id);try{const db=await idb();return await new Promise((res,rej)=>{const r=db.transaction('p').objectStore('p').get(id);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}catch(e){return null}}
-async function delPhoto(id){mem.delete(id);try{const db=await idb();db.transaction('p','readwrite').objectStore('p').delete(id)}catch(e){}}
+async function getLocalPhoto(id){if(mem.has(id))return mem.get(id);try{const db=await idb();return await new Promise((res,rej)=>{const r=db.transaction('p').objectStore('p').get(id);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}catch(e){return null}}
+const miss=new Set();
+async function getPhoto(id){
+  const l=await getLocalPhoto(id);if(l)return l;
+  if(!sb||!session||miss.has(id)||!navigator.onLine)return null;
+  try{const{data,error}=await sb.storage.from('photos').download(session.user.id+'/'+id+'.jpg');
+    if(data&&!error){await putPhoto(id,data);S.up[id]=1;persist();return data}
+    if(error&&/not.?found|404/i.test(String(error.message||'')+String(error.statusCode||error.status||'')))miss.add(id)}catch(e){}
+  return null}
+async function delPhoto(id){mem.delete(id);if(S.up[id]){delete S.up[id];S.pdel.push(id)}try{const db=await idb();db.transaction('p','readwrite').objectStore('p').delete(id)}catch(e){}}
 function resize(file,max=1280,q=.78){return new Promise((res,rej)=>{const img=new Image(),url=URL.createObjectURL(file);
   img.onload=()=>{const k=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
     c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);c.toBlob(b=>b?res(b):rej(new Error('blob')),'image/jpeg',q)};
@@ -340,7 +412,7 @@ function bedInfo(id){
   return{cur,fert:last('fert'),spray:last('spray'),safeOn};
 }
 function title(r){switch(r.type){
-  case'plant':return(r.crop||'作付け')+(r.variety?'（'+r.variety+'）':'')+' 作付け';
+  case'plant':return(r.crop||'作付け')+(r.variety?'（'+r.variety+'）':'')+' '+(r.how||'作付け');
   case'fert':return'施肥：'+(r.material||'—')+(r.amount?' '+r.amount:'');
   case'spray':return'散布：'+(r.material||'—')+(r.dilution?' '+r.dilution+'倍':'');
   case'harvest':return'収穫：'+(r.crop||'')+(r.amount?' '+r.amount:'');
@@ -362,7 +434,7 @@ function rotationIssues(bedId,crop,date,ignoreId){
 function rotationHTML(id){
   const t=today();
   const plants=S.records.filter(r=>r.type==='plant'&&!r.plan&&r.beds.includes(id)).sort(byDate).reverse();
-  if(!plants.length)return'<h3>連作障害チェック</h3><p class="sub">作付けの履歴がないので、連作障害の心配なく植えられます。</p>';
+  if(!plants.length)return'<h3>連作障害チェック</h3><p class="sub">作付けの履歴がないので、連作障害の心配なく植えられます。</p>'+nowOkHTML(CROPS.map(c=>c.n));
   const fam=new Map(),unknown=new Set();
   for(const r of plants){const c=findCrop(r.crop);if(!c){if(r.crop)unknown.add(r.crop);continue}
     if(!c.y||fam.has(c.f))continue;fam.set(c.f,{r,c,until:addDays(r.date,Math.round(c.y*365.25))})}
@@ -372,6 +444,7 @@ function rotationHTML(id){
   let h='<h3>連作障害チェック</h3>';
   h+=avoid.length?`<div class="rotbox bad">${avoid.map(([f,v])=>`<div>⚠ <b>${esc(f)}</b>は ${full(v.until)} ごろまで避けるのが目安（${esc(v.r.crop)} ${full(v.r.date)} 作付け）</div>`).join('')}</div>`:'<div class="rotbox ok">いま避けたほうがいい科はありません。</div>';
   if(ngCrops.length)h+=`<p class="sub" style="margin:8px 0 2px">いま植えると連作になりやすい作物</p><div style="font-size:14px">${esc(ngCrops.join('、'))}</div>`;
+  h+=nowOkHTML(okCrops);
   h+=`<p class="sub" style="margin:8px 0 2px">連作の面で問題ない作物（季節は別に考えてください）</p><div style="font-size:14px">${esc(okCrops.join('、'))}</div>`;
   if(unknown.size)h+=`<p class="note">連作データがない作物：${esc([...unknown].join('、'))}</p>`;
   return h;
@@ -474,7 +547,8 @@ function renderMap(){
 }
 
 /* ---------- 記録カード ---------- */
-function recHTML(r,hideBeds){
+const offTag=(d,b)=>{const n=dd(d,b);return`<span class="dd">${n>=0?'+'+n+'日':(-n)+'日前'}</span>`};
+function recHTML(r,hideBeds,base){
   const t=TYPES[r.type],late=r.plan&&r.date<today();
   let ex='';
   if(r.type==='plant'){const c=findCrop(r.crop);if(c)ex+=`<div class="sub">${esc(c.f)}</div>`;if(r.harvestPlan)ex+=`<div class="sub">収穫予定 ${full(r.harvestPlan)}</div>`}
@@ -483,7 +557,7 @@ function recHTML(r,hideBeds){
   if(r.memo)ex+=`<p>${esc(r.memo)}</p>`;
   const ph=r.photos&&r.photos.length?`<div class="ph">${r.photos.map(id=>`<img class="thumb" data-pid="${id}" alt="">`).join('')}</div>`:'';
   return`<article class="rec${r.plan?' plan':''}" data-id="${r.id}">
-   <div class="rh"><span class="ic">${t.icon}</span><b>${esc(title(r))}</b><span class="sub">${full(r.date)}</span>${r.plan?'<span class="tag">予定</span>':''}${late?'<span class="tag late">期限超過</span>':''}</div>
+   <div class="rh"><span class="ic">${t.icon}</span><b>${esc(title(r))}</b><span class="sub">${full(r.date)}</span>${base?offTag(r.date,base):''}${r.auto?'<span class="tag">自動</span>':''}${r.plan?'<span class="tag">予定</span>':''}${late?'<span class="tag late">期限超過</span>':''}</div>
    ${hideBeds?'':`<div class="sub">畝 ${esc(r.beds.map(bedLabel).join('・'))}</div>`}${ex}${ph}
    <div class="ra">${r.plan?'<button class="btn sm pri" data-act="done">実施した</button>':''}<button class="btn sm" data-act="edit">編集</button></div></article>`}
 
@@ -543,7 +617,7 @@ function renderData(){
 }
 function renderRot(){
   const fams=[...new Set(CROPS.map(c=>c.f))];
-  $('#v-rot').innerHTML=`<div class="card rot"><h2>連作障害の目安</h2>
+  $('#v-rot').innerHTML=`${areaCardHTML()}<div class="card rot"><h2>連作障害の目安</h2>
    <p class="sub">同じ科の作物を同じ畝で続けて作ると、病気や生育不良が出やすくなります。「目安」は、同じ科を同じ畝で作付けする間隔の年数です。作付けを記録するとき、同じ畝の履歴と照らして警告します。</p>
    ${fams.map(f=>`<h3>${esc(f)}</h3><table><thead><tr><th>作物</th><th>目安</th><th>資料での幅</th></tr></thead><tbody>${CROPS.filter(c=>c.f===f).map(c=>`<tr><td>${esc(c.n)}</td><td>${c.y?c.y+'年':'連作可'}</td><td class="sub">${esc(c.r)}</td></tr>`).join('')}</tbody></table>`).join('')}
    <h3>注意</h3>
@@ -553,16 +627,16 @@ function renderRot(){
     <a href="https://www.city.matsuyama.ehime.jp/kurashi/sangyo/noringyo/shidou/nougyousidoucenter.files/1.kiso.pdf" target="_blank" rel="noopener">松山市 農業指導センター資料</a>、
     <a href="https://www.pref.kyoto.jp/nosan/documents/kosyu.pdf" target="_blank" rel="noopener">京都府 資料</a>、
     <a href="https://www.satoland.com/files/libs/4070/202212171309441560.pdf" target="_blank" rel="noopener">satoland.com 資料</a>、
-    科の分類は <a href="https://www.city.suzuka.lg.jp/_res/projects/default_project/_page_/001/003/343/06.pdf" target="_blank" rel="noopener">鈴鹿市 資料</a>。</p></div>`;
+    科の分類は <a href="https://www.city.suzuka.lg.jp/_res/projects/default_project/_page_/001/003/343/06.pdf" target="_blank" rel="noopener">鈴鹿市 資料</a>。</p></div>${fertCardHTML()}`;
 }
 function fillLists(){
   const used=new Set(S.records.map(r=>r.crop).filter(Boolean));
-  $('#dl-crops').innerHTML=[...new Set([...CROPS.map(c=>c.n),...used])].map(c=>`<option value="${esc(c)}">`).join('');
+  $('#dl-crops').innerHTML=[...new Set([...CROPS.map(c=>c.n),...SEASON.map(c=>c.n),...used])].map(c=>`<option value="${esc(c)}">`).join('');
   $('#dl-mats').innerHTML=[...new Set(S.records.map(r=>r.material).filter(Boolean))].map(c=>`<option value="${esc(c)}">`).join('');
 }
 function renderAll(){
   if(sel&&!(getBed(sel)&&!getBed(sel).retired))sel=null;
-  renderMap();renderDetail();fillBedFilter();renderLog();renderPlan();renderData();fillLists();renderEditBar();
+  renderMap();renderDetail();fillBedFilter();renderLog();renderPlan();renderData();fillLists();renderEditBar();renderCrop();renderRot();
 }
 
 /* ---------- 畝の編集（結合・分割・名前変更） ---------- */
@@ -582,7 +656,7 @@ function renderEditBar(){
    <button class="btn pri" id="e-done">編集を終える</button>`;
 }
 const snap=()=>{undoSnap=JSON.stringify({beds:S.beds,records:S.records})};
-function afterEdit(){save();renderAll()}
+function afterEdit(){S.bu=Date.now();save();renderAll()}
 async function eMerge(){
   const bs=[...esel].map(getBed).filter(Boolean).sort((a,b)=>b.area-a.area);
   if(bs.length<2)return;
@@ -609,7 +683,7 @@ async function eCut(){
   const nb=[{id:a,area:ar,pts:r.A},{id:bId,area:Math.round((X.area-ar)*10)/10,pts:r.B}];
   const i=S.beds.indexOf(X);S.beds.splice(i,1,...nb);
   for(const o of active())if(!nb.includes(o))for(const ip of r.ints)insertPt(o.pts,ip);
-  for(const rec of S.records)if(rec.beds.includes(X.id))rec.beds=[...new Set(rec.beds.flatMap(id=>id===X.id?[a,bId]:[id]))];
+  for(const rec of S.records)if(rec.beds.includes(X.id)){rec.beds=[...new Set(rec.beds.flatMap(id=>id===X.id?[a,bId]:[id]))];rec.u=Date.now()}
   splitMode=false;cut=null;esel=new Set([a,bId]);afterEdit();toast(`${X.id} を ${a} と ${bId} に分けました（履歴は両方に引き継ぎ）`);
 }
 async function eRename(){
@@ -618,12 +692,14 @@ async function eRename(){
   if(!n)return toast('名前を入力してください');
   if(getBed(n))return toast('その名前はすでに使われています');
   snap();
-  for(const r of S.records)r.beds=r.beds.map(id=>id===X.id?n:id);
+  for(const r of S.records)if(r.beds.includes(X.id)){r.beds=r.beds.map(id=>id===X.id?n:id);r.u=Date.now()}
   for(const b of S.beds)if(b.mergedInto===X.id)b.mergedInto=n;
   X.id=n;esel=new Set([n]);afterEdit();toast('名前を変更しました');
 }
 function eUndo(){
-  if(!undoSnap)return;const o=JSON.parse(undoSnap);S.beds=o.beds;S.records=o.records;undoSnap=null;esel=new Set();splitMode=false;cut=null;afterEdit();toast('元に戻しました');
+  if(!undoSnap)return;const o=JSON.parse(undoSnap);
+  const strip=r=>{const c={...r};delete c.u;return JSON.stringify(c)},was=new Map(S.records.map(r=>[r.id,strip(r)]));
+  S.beds=o.beds;S.records=o.records;for(const r of S.records)if(was.get(r.id)!==strip(r))r.u=Date.now();undoSnap=null;esel=new Set();splitMode=false;cut=null;afterEdit();toast('元に戻しました');
 }
 function exitEdit(){editMode=false;splitMode=false;cut=null;esel=new Set();undoSnap=null;renderAll()}
 $('#editToggle').onclick=()=>{if(editMode)return exitEdit();editMode=true;sel=null;esel=new Set();undoSnap=null;showView('map');renderAll()};
@@ -665,8 +741,9 @@ function openForm(rec,preset){
   $('#f-beds').innerHTML=S.beds.filter(b=>ids.has(b.id)).map(b=>`<label class="chip"><input type="checkbox" value="${esc(b.id)}"${r.beds.includes(b.id)?' checked':''}><span>${esc(bedLabel(b.id))}</span></label>`).join('');
   $('#f-del').hidden=!rec;
   syncFields();renderFormPhotos();
+  $('#f-af').checked=rec?!!rec.af:true;
   if(r.type==='harvest')prefillCrop();
-  updateRot();
+  updateRot();updateAf();updateSeason();
   $('#dlg').showModal();
 }
 function prefillCrop(){if($('#f-crop').value)return;const b=selBeds()[0],c=b&&bedInfo(b).cur;if(c)$('#f-crop').value=c.crop}
@@ -674,6 +751,8 @@ $('#f-type').addEventListener('change',()=>{syncFields();if($('#f-type').value==
 $('#f-crop').addEventListener('input',updateRot);
 $('#f-date').addEventListener('change',updateRot);
 $('#f-beds').addEventListener('change',updateRot);
+$('#f-crop').addEventListener('input',updateAf);$('#f-how').addEventListener('change',updateAf);$('#f-date').addEventListener('change',updateAf);$('#f-af').addEventListener('change',updateAf);$('#f-type').addEventListener('change',updateAf);
+$('#f-crop').addEventListener('input',updateSeason);$('#f-how').addEventListener('change',updateSeason);$('#f-date').addEventListener('change',updateSeason);$('#f-type').addEventListener('change',updateSeason);
 $('#f-file').addEventListener('change',async e=>{
   for(const f of e.target.files){try{const b=await resize(f),id=uid();mem.set(id,b);pend.push({id})}catch(err){toast('写真を読み込めませんでした')}}
   e.target.value='';renderFormPhotos()});
@@ -682,7 +761,8 @@ $('#f-photos').addEventListener('click',e=>{const x=e.target.closest('[data-rm]'
 $('#f-cancel').onclick=()=>{for(const p of pend)mem.delete(p.id);$('#dlg').close()};
 $('#f-del').onclick=async()=>{if(!editing)return;if(!await ask('この記録を削除しますか？'))return;
   for(const id of editing.photos||[])await delPhoto(id);
-  S.records=S.records.filter(r=>r.id!==editing.id);undoSnap=null;save();$('#dlg').close();renderAll();toast('削除しました')};
+  if(editing.type==='plant')removeAuto(editing.id);
+  S.records=S.records.filter(r=>r.id!==editing.id);S.tomb[editing.id]=Date.now();undoSnap=null;save();$('#dlg').close();renderAll();toast('削除しました')};
 $('#f').addEventListener('submit',async e=>{
   e.preventDefault();
   const type=$('#f-type').value,beds=selBeds();
@@ -690,10 +770,17 @@ $('#f').addEventListener('submit',async e=>{
   if(type==='plant'&&!$('#f-crop').value.trim())return toast('作物名を入力してください');
   const r={id:editing?editing.id:uid(),type,date:$('#f-date').value||today(),plan:$('#f-plan').checked,beds:S.beds.map(b=>b.id).filter(id=>beds.includes(id))};
   for(const k of FIELDS){const el=$('#f-'+k),w=el.closest('[data-t]');r[k]=(!w||w.dataset.t.split(' ').includes(type))?el.value.trim():''}
+  if(editing){if(editing.src)r.src=editing.src;if(editing.auto)r.auto=true;if(editing.si!=null)r.si=editing.si}
   for(const p of pend)await putPhoto(p.id,mem.get(p.id));
   for(const id of(editing?editing.photos:[])||[])if(!keep.includes(id))await delPhoto(id);
   r.photos=[...keep,...pend.map(p=>p.id)];
-  if(editing)S.records[S.records.findIndex(x=>x.id===editing.id)]=r;else S.records.push(r);
+  r.u=Date.now();delete S.tomb[r.id];
+  if(type==='plant'){
+    const sig=x=>[x.crop,x.date,x.how,x.beds.join(','),!!x.af].join('|');
+    const afc=$('#f-af');r.af=!!(afc.checked&&!afc.disabled&&fertPlanFor(r.crop,r.how,r.date));
+    if(!editing||sig(editing)!==sig(r)){removeAuto(r.id);if(r.af)genAuto(r)}
+  }
+  const ix=editing?S.records.findIndex(x=>x.id===editing.id):-1;if(ix>=0)S.records[ix]=r;else S.records.push(r);
   undoSnap=null;save();$('#dlg').close();renderAll();toast(r.plan?'予定に登録しました':'保存しました');
 });
 
@@ -713,6 +800,7 @@ document.addEventListener('click',e=>{
   const a=e.target.closest('[data-act]');
   if(a){const card=a.closest('[data-id]'),r=card&&S.records.find(x=>x.id===card.dataset.id);if(!r)return;
     openForm(r);if(a.dataset.act==='done'){$('#f-plan').checked=false;$('#f-date').value=today()}return}
+  const cb=e.target.closest('[data-crop]');if(cb){cropSel=cb.dataset.crop;renderCrop();return}
   const th=e.target.closest('img.thumb');if(th&&th.src){$('#viewer img').src=th.src;$('#viewer').hidden=false;return}
   const q=e.target.closest('[data-quick]');if(q){openForm(null,{type:q.dataset.quick,beds:sel?[sel]:[]});return}
   if(e.target.closest('#d-back')){pick(null);return}
@@ -734,25 +822,40 @@ $('#d-import').addEventListener('change',async e=>{
   const f=e.target.files[0];if(!f)return;
   try{const j=JSON.parse(await f.text());if(!Array.isArray(j.records))throw 0;
     if(!await ask('いまのデータを置き換えて、'+j.records.length+'件を読み込みます。よろしいですか？'))return;
-    S={records:j.records,beds:Array.isArray(j.beds)?j.beds:clone(DEFAULT_BEDS)};
+    const t=Date.now(),keepIds=new Set(j.records.map(r=>r.id)),tomb={...S.tomb};
+    for(const r of S.records)if(!keepIds.has(r.id))tomb[r.id]=t;
+    S={records:j.records.map(r=>({...r,u:t})),beds:Array.isArray(j.beds)?j.beds:clone(DEFAULT_BEDS),tomb,bu:t,up:S.up||{},pdel:S.pdel||[]};
+    for(const r of S.records)delete S.tomb[r.id];
     for(const[id,u]of Object.entries(j.photos||{}))await putPhoto(id,await(await fetch(u)).blob());
     undoSnap=null;sel=null;exitEdit();save();renderAll();toast('読み込みました')}catch(err){toast('読み込めないファイルです')}
   e.target.value=''});
-$('#d-clear').onclick=async()=>{if(!await ask('記録と写真をすべて消します（畝の形は残ります）。元に戻せません。'))return;
+$('#d-clear').onclick=async()=>{if(!await ask('記録と写真をすべて消します（畝の形は残ります）。同期している場合は、他の端末のデータも消えます。元に戻せません。'))return;
   for(const r of S.records)for(const id of r.photos||[])await delPhoto(id);
-  S.records=[];undoSnap=null;save();sel=null;renderAll();toast('消去しました')};
+  {const t=Date.now();for(const r of S.records)S.tomb[r.id]=t}S.records=[];undoSnap=null;save();sel=null;renderAll();toast('消去しました')};
 $('#d-reset').onclick=async()=>{if(!await ask('畝の形を最初の13区画に戻します。記録は消えませんが、結合・分割した畝の記録は対応する畝がなくなる場合があります。'))return;
-  S.beds=clone(DEFAULT_BEDS);const ids=new Set(S.beds.map(b=>b.id));
-  for(const r of S.records)r.beds=r.beds.filter(id=>ids.has(id));
+  S.beds=clone(DEFAULT_BEDS);const ids=new Set(S.beds.map(b=>b.id)),t=Date.now();S.bu=t;
+  for(const r of S.records){const nb=r.beds.filter(id=>ids.has(id));if(nb.length!==r.beds.length){r.beds=nb;r.u=t}}
+  for(const r of S.records)if(!r.beds.length)S.tomb[r.id]=t;
   S.records=S.records.filter(r=>r.beds.length);
   exitEdit();sel=null;save();renderAll();toast('畝の形を戻しました')};
 $('#d-sample').onclick=()=>{
   const t=today(),A=n=>addDays(t,-n);
-  const mk=o=>S.records.push(Object.assign({id:uid(),plan:false,beds:[],crop:'',variety:'',harvestPlan:'',material:'',amount:'',dilution:'',target:'',phi:'',memo:'',photos:[]},o));
+  const mk=o=>S.records.push(blank(o)),Y=new Date().getFullYear();
   mk({type:'plant',date:A(45),beds:['1-1'],crop:'ブロッコリー',harvestPlan:addDays(t,30)});
   mk({type:'fert',date:A(40),beds:['1-1'],material:'苦土石灰（サンプル）',amount:'100g/㎡'});
   mk({type:'fert',date:A(20),beds:['1-1'],material:'化成肥料（サンプル）',amount:'100g/㎡'});
   mk({type:'spray',date:A(5),beds:['1-1'],material:'サンプル農薬A',dilution:'1000',target:'アオムシ',phi:'7',memo:'サンプルです'});
+  mk({type:'plant',date:`${Y-2}-05-10`,beds:['2-1'],crop:'トマト',how:'定植',variety:'桃太郎'});
+  mk({type:'fert',date:`${Y-2}-06-01`,beds:['2-1'],material:'化成肥料（サンプル）',amount:'30g/株'});
+  mk({type:'fert',date:`${Y-2}-06-22`,beds:['2-1'],material:'化成肥料（サンプル）',amount:'30g/株'});
+  mk({type:'spray',date:`${Y-2}-07-05`,beds:['2-1'],material:'サンプル農薬B',dilution:'1000',target:'うどんこ病',phi:'1'});
+  mk({type:'harvest',date:`${Y-2}-07-15`,beds:['2-1'],crop:'トマト',amount:'3kg'});
+  mk({type:'harvest',date:`${Y-2}-08-10`,beds:['2-1'],crop:'トマト',amount:'5kg'});
+  mk({type:'clear',date:`${Y-2}-09-30`,beds:['2-1']});
+  mk({type:'plant',date:`${Y-1}-05-15`,beds:['2-3'],crop:'トマト',how:'定植',variety:'アイコ'});
+  mk({type:'fert',date:`${Y-1}-06-08`,beds:['2-3'],material:'化成肥料（サンプル）',amount:'30g/株'});
+  mk({type:'harvest',date:`${Y-1}-07-20`,beds:['2-3'],crop:'トマト',amount:'4kg'});
+  mk({type:'clear',date:`${Y-1}-10-05`,beds:['2-3']});
   mk({type:'plant',date:A(400),beds:['2-2'],crop:'トマト'});
   mk({type:'clear',date:A(250),beds:['2-2']});
   mk({type:'plant',date:A(30),beds:['2-2','2-3'],crop:'玉ねぎ'});
@@ -761,12 +864,332 @@ $('#d-sample').onclick=()=>{
   mk({type:'fert',date:addDays(t,3),plan:true,beds:['2-2','2-3'],material:'追肥（サンプル）',amount:'30g/㎡'});
   undoSnap=null;save();renderAll();toast('サンプルを入れました')};
 
+/* ---------- 追肥の自動予定 ---------- */
+const blank=o=>Object.assign({id:uid(),u:Date.now(),plan:false,beds:[],crop:'',variety:'',how:'',harvestPlan:'',material:'',amount:'',dilution:'',target:'',phi:'',memo:'',photos:[]},o);
+// b:起点（定植/播種/植え付け）、raise:播種から定植までの日数、steps:[起点からの日数,内容]、basis:資料の記載
+const FERT_PLAN={
+ 'トマト':{b:'定植',raise:55,basis:'第1果房が鶏卵大になった頃から、2〜3回に分けて（愛知県・岡山県）',steps:[[21,'1回目：第1果房が鶏卵大になった頃'],[42,'2回目：2〜3週間後'],[63,'3回目：草勢を見て']]},
+ 'ナス':{b:'定植',raise:70,basis:'第1果の収穫直前から10〜14日おき（岡山県）。3番果の収穫頃から7〜14日間隔（愛知県）',steps:[[30,'1回目：第1果の収穫が始まる頃'],[44,'2回目：2週間後'],[58,'3回目：2週間後'],[72,'4回目：2週間後'],[86,'5回目：2週間後（草勢を見て）']]},
+ 'キュウリ':{b:'定植',raise:30,basis:'果実の肥大が始まる頃から1週間おき（岡山県）',steps:[[21,'1回目：果実が大きくなり始める頃'],[35,'2回目：1〜2週間後'],[49,'3回目：1〜2週間後'],[63,'4回目：草勢を見て']]},
+ 'ピーマン':{b:'定植',raise:60,basis:'草勢に応じて分けて施す（愛知県）',steps:[[28,'1回目：着果が進んできた頃'],[49,'2回目：2〜3週間後'],[70,'3回目：草勢を見て'],[91,'4回目：草勢を見て']]},
+ 'スイカ':{b:'定植',raise:30,basis:'つるの長さ50cmの頃（勢いが強ければ省く）、第1花が着果した頃、第1果が茶碗大の頃（岡山県）',steps:[[25,'1回目：つるの長さ50cmの頃（勢いが強ければ省く）'],[45,'2回目：第1花が着果した頃'],[60,'3回目：第1果が茶碗大の頃']]},
+ 'カボチャ':{b:'定植',raise:30,basis:'2回。2回目は果実が6〜10cmの頃（愛知県）',steps:[[21,'1回目：つるが伸び始める頃'],[45,'2回目：果実が6〜10cmの頃']]},
+ 'ダイコン':{b:'播種',basis:'種まき後15〜20日頃から。本葉1枚・3〜4枚・6〜7枚の頃に分けて（愛知県・名古屋市）',steps:[[18,'1回目：本葉3〜4枚の頃（間引きと一緒に）'],[35,'2回目：本葉6〜7枚の頃']]},
+ 'ニンジン':{b:'播種',basis:'本葉2枚・丈5〜6cmの頃から（名古屋市）。夏まきは3回の例（愛知県）',steps:[[35,'1回目：本葉2〜3枚、間引き後'],[55,'2回目：約20日後']]},
+ 'ハクサイ':{b:'定植',raise:25,basis:'2〜3回。地温が15℃以下になる前に、遅れないよう施す（愛知県）',steps:[[15,'1回目：定植後2週間ほど'],[35,'2回目：結球が始まる前'],[55,'3回目：結球期（地温が下がる前に）']]},
+ 'キャベツ':{b:'定植',raise:30,basis:'定植後20日頃と、葉が巻き始める結球の初期（愛知県・滋賀県）',steps:[[20,'1回目：定植後20日頃'],[40,'2回目：葉が巻き始める頃（結球初期）']]},
+ 'ブロッコリー':{b:'定植',raise:30,basis:'定植後15〜20日頃と、花蕾が見え始める頃（花蕾がピンポン玉大までに）（名古屋市・愛知県）',steps:[[18,'1回目：定植後15〜20日頃（盛んに伸び始める頃）'],[38,'2回目：花蕾が見え始める頃（本葉15〜16枚）']]},
+ 'ホウレンソウ':{b:'播種',basis:'種まき後20日頃に1回（愛知県）',steps:[[20,'種まき後20日頃に1回']]},
+ 'タマネギ':{b:'定植',raise:50,basis:'12月中旬（葉鞘の太さ3cm）に1回、3月上旬に1回。3月中旬以降は遅い（愛知県）。日数は11月上旬の定植を想定',steps:[[40,'1回目：12月頃（葉鞘の太さ3cmが目安）'],[110,'2回目：2月下旬〜3月上旬（3月中旬以降は遅い）']]},
+ 'ネギ':{b:'定植',raise:60,basis:'3〜4回、追肥と土寄せを一緒に（名古屋市）',steps:[[30,'1回目：追肥と土寄せ'],[55,'2回目：追肥と土寄せ'],[80,'3回目：追肥と土寄せ'],[105,'4回目：追肥と土寄せ（草勢を見て）']]},
+ 'ジャガイモ':{b:'植え付け',basis:'春植えは4月中旬に1回（愛知県）。芽かき・土寄せの頃',steps:[[35,'芽かき・土寄せの頃に1回']]},
+ 'サトイモ':{b:'植え付け',basis:'6月上旬と7月下旬の2回。追肥のあとは株元に土寄せ（愛知県）',steps:[[35,'1回目：追肥して土寄せ'],[85,'2回目：追肥して土寄せ']]},
+ 'スイートコーン':{b:'播種',basis:'本葉5枚頃と、雄穂が出てくる頃の2回（名古屋市）',steps:[[30,'1回目：本葉5枚頃'],[55,'2回目：雄穂が出てくる頃']]},
+ 'エダマメ':{b:'播種',basis:'開花始め頃に1回。中耕・除草を兼ねる（愛知県）',steps:[[35,'開花始め頃に1回（中耕・除草と一緒に）']]}
+};
+function fertPlanFor(crop,how,date){
+  const c=findCrop(crop),f=c&&FERT_PLAN[c.n];if(!f||!date)return null;
+  const shift=(f.b==='定植'&&how==='播種')?(f.raise||0):0;
+  return{f,shift,steps:f.steps.map(([d,t])=>({date:addDays(date,d+shift),label:t}))}}
+function removeAuto(plantId){const t=Date.now();for(const x of S.records)if(x.src===plantId&&x.plan)S.tomb[x.id]=t;S.records=S.records.filter(x=>!(x.src===plantId&&x.plan))}
+function genAuto(r){const p=fertPlanFor(r.crop,r.how,r.date);if(!p)return;
+  const doneIdx=new Set(S.records.filter(x=>x.src===r.id&&!x.plan).map(x=>x.si));
+  p.steps.forEach((st,i)=>{if(doneIdx.has(i))return;
+    S.records.push(blank({type:'fert',date:st.date,plan:true,beds:r.beds.slice(),material:'追肥（目安）',memo:st.label+'\n※日数は目安です。生育を見て調整し、肥料の量は袋の表示に従ってください。',src:r.id,si:i,auto:true}))})}
+function updateAf(){
+  const cb=$('#f-af'),pv=$('#f-afprev');
+  if($('#f-type').value!=='plant'){pv.textContent='';return}
+  const crop=$('#f-crop').value.trim(),how=$('#f-how').value,date=$('#f-date').value||today();
+  if(!crop){cb.disabled=true;pv.textContent='';return}
+  const p=fertPlanFor(crop,how,date);
+  if(!p){cb.disabled=true;pv.textContent='この作物の追肥の目安データはありません（追肥が基本不要の作物もあります）。';return}
+  cb.disabled=false;
+  let h=cb.checked?p.steps.map(st=>`${md(st.date)}　${esc(st.label)}`).join('<br>'):'';
+  if(cb.checked&&p.f.b!=='播種'&&!p.shift)h+=`<br>※日数は${esc(p.f.b)}の日から数えます。${p.f.b==='定植'?'種まきの日を入れるときは、方法で「播種」を選んでください。':''}`;
+  if(cb.checked&&p.shift)h+=`<br>※播種から定植までの約${p.shift}日ぶんを足して計算しています。`;
+  pv.innerHTML=h;
+}
+function fertCardHTML(){
+  const rows=Object.entries(FERT_PLAN).map(([n,f])=>`<tr><td>${esc(n)}</td><td>${esc(f.b)}</td><td>${f.steps.map(([d,t])=>`${d}日　${esc(t)}`).join('<br>')}</td></tr>`).join('');
+  return`<div class="card"><h2>追肥の目安</h2>
+   <p class="sub">作付けの記録で「追肥の予定を自動で入れる」にすると、この表をもとに予定タブへ入ります。</p>
+   <div class="mwrap"><table><thead><tr><th>作物</th><th>起点</th><th>起点からの日数と内容</th></tr></thead><tbody>${rows}</tbody></table></div>
+   <h3>資料に書かれていること</h3>
+   <ul class="plain">${Object.entries(FERT_PLAN).map(([n,f])=>`<li><b>${esc(n)}</b>：${esc(f.basis)}</li>`).join('')}</ul>
+   <h3>注意</h3>
+   <ul class="plain"><li>資料の多くは「第1果房が大きくなった頃」のように、生育の段階で書かれています。表の日数は、それを一般的な栽培日数に直した目安です。実際の生育を見て、予定の日付を直してください。</li>
+   <li>苗を育ててから植える作物（トマトなど）で、方法を「播種」にした場合は、育苗の日数を足して計算します。</li>
+   <li>表にない作物（コマツナ、サツマイモ、エンドウ、ソラマメなど）は、自動では入りません。</li>
+   <li>肥料の種類と量は、肥料の袋の表示に従ってください。</li></ul>
+   <p class="note">出典（公開資料から作成）：
+    <a href="https://www.pref.aichi.jp/uploaded/attachment/369941.pdf" target="_blank" rel="noopener">愛知県 施肥基準</a>、
+    <a href="https://www.pref.okayama.jp/uploaded/life/55809_191201_misc.pdf" target="_blank" rel="noopener">岡山県 資料</a>、
+    <a href="https://www.city.nagoya.jp/_res/projects/default_project/_page_/001/034/816/o9x5_d_3_9_e.pdf" target="_blank" rel="noopener">名古屋市 資料</a>、
+    <a href="https://www.pref.shiga.lg.jp/file/attachment/1049287.pdf" target="_blank" rel="noopener">滋賀県 資料</a>。</p></div>`;
+}
+
+/* ---------- 作物別の履歴 ---------- */
+let cropSel=null;
+const ICON={plant:'🌱',fert:'🧪',spray:'💧',harvest:'🧺',clear:'🧹',memo:'📝'};
+function buildCults(){
+  const all=S.records,done=all.filter(r=>!r.plan);
+  const plants=done.filter(r=>r.type==='plant').sort(byDate);
+  const cults=plants.map(P=>{
+    const ends={};
+    for(const b of P.beds){
+      let e=null;
+      for(const r of done){
+        if(r.id===P.id||!r.beds.includes(b))continue;
+        const after=r.date>P.date||(r.date===P.date&&r.id>P.id);
+        let cand=null;
+        if(r.type==='plant'&&after)cand={date:r.date,incl:false};
+        else if(r.type==='clear'&&r.date>=P.date)cand={date:r.date,incl:true};
+        if(cand&&(!e||cand.date<e.date||(cand.date===e.date&&!cand.incl)))e=cand;
+      }
+      ends[b]=e;
+    }
+    return{P,key:kata(P.crop),ends,ev:[]};
+  });
+  const inMain=new Set();
+  for(const c of cults)for(const r of all){
+    if(r.id===c.P.id||r.type==='plant'||r.date<c.P.date)continue;
+    if(r.beds.some(b=>c.P.beds.includes(b)&&(!c.ends[b]||r.date<c.ends[b].date||(r.date===c.ends[b].date&&c.ends[b].incl)))){c.ev.push(r);inMain.add(r.id)}
+  }
+  for(const c of cults)for(const r of all){   // 作付け前3週間の施肥・散布（基肥など）
+    if(inMain.has(r.id)||r.type==='plant'||r.type==='harvest'||r.type==='clear'||r.date>=c.P.date||dd(c.P.date,r.date)>21)continue;
+    if(r.beds.some(b=>c.P.beds.includes(b)))c.ev.push(r);
+  }
+  for(const c of cults)c.ev.sort(byDate);
+  return cults;
+}
+function cultStats(c){
+  const ev=c.ev.filter(r=>!r.plan),hv=ev.filter(r=>r.type==='harvest');
+  return{fert:ev.filter(r=>r.type==='fert'&&r.date>=c.P.date).length,spray:ev.filter(r=>r.type==='spray').length,
+    firstH:hv[0],lastH:hv[hv.length-1],clear:ev.find(r=>r.type==='clear'),plans:c.ev.filter(r=>r.plan).length}
+}
+function monthRow(c,cm){
+  const cells=Array.from({length:12},()=>new Map());
+  const add=(r,pl)=>{cells[+r.date.slice(5,7)-1].set(r.type+(pl?'*':''),1)};
+  add(c.P,false);for(const r of c.ev)add(r,r.plan);
+  const order=['plant','fert','spray','harvest','clear','memo'];
+  return`<tr><td class="rl">${esc(c.P.date.slice(0,4))} ${esc(c.P.beds.join('・'))}</td>${cells.map((m,i)=>`<td${i+1===cm?' class="cur"':''}>${order.map(k=>m.has(k)?`<span>${ICON[k]}</span>`:'').join('')}${order.map(k=>m.has(k+'*')?`<span class="pl">${ICON[k]}</span>`:'').join('')}</td>`).join('')}</tr>`;
+}
+function renderCrop(){
+  const root=$('#v-crop'),cults=buildCults();
+  if(!cults.length){root.innerHTML='<div class="card"><h2>作物別の履歴</h2><p class="sub">「作付け」の記録を入れると、作物ごとに過去の栽培の履歴が見られます。</p></div>';return}
+  const groups=new Map();
+  for(const c of cults){let g=groups.get(c.key);if(!g){g={key:c.key,name:c.P.crop,list:[]};groups.set(c.key,g)}g.list.push(c);g.name=c.P.crop}
+  const gs=[...groups.values()].sort((a,b)=>a.list[a.list.length-1].P.date<b.list[b.list.length-1].P.date?1:-1);
+  if(!cropSel||!groups.has(cropSel))cropSel=gs[0].key;
+  const g=groups.get(cropSel),list=g.list.slice().reverse(),fam=findCrop(g.name),cm=new Date().getMonth()+1;
+  const years=[...new Set(list.map(c=>c.P.date.slice(0,4)))].sort();
+  root.innerHTML=`<div class="cropchips">${gs.map(x=>`<button class="chipbtn${x.key===cropSel?' on':''}" data-crop="${esc(x.key)}">${esc(x.name)}<small>${x.list.length}</small></button>`).join('')}</div>
+   <div class="card"><h2>${esc(g.name)}${fam?` <span class="sub">${esc(fam.f)}</span>`:''}</h2>
+    <div class="sub">${list.length}回の栽培（${years[0]}${years.length>1?'〜'+years[years.length-1]:''}年）</div>
+    <h3>月ごとの作業（年ごとの比較）</h3>
+    <div class="mwrap"><table class="mtab"><thead><tr><th class="rl"></th>${Array.from({length:12},(_,i)=>`<th${i+1===cm?' class="cur"':''}>${i+1}</th>`).join('')}</tr></thead><tbody>${list.map(c=>monthRow(c,cm)).join('')}</tbody></table></div>
+    <div class="dd">🌱作付け　🧪施肥　💧散布　🧺収穫　🧹片付け（薄い表示は予定）</div>
+    <h3>栽培ごとの記録</h3>
+    ${list.map((c,i)=>{const st=cultStats(c),P=c.P;
+      const sum=[`畝 ${P.beds.map(bedLabel).join('・')}`,st.firstH?`初収穫 ${md(st.firstH.date)}（${dd(st.firstH.date,P.date)}日目）`:'収穫の記録なし',`施肥${st.fert}回`,`散布${st.spray}回`,st.clear?`片付け ${md(st.clear.date)}`:'栽培中'];
+      if(st.plans)sum.push(`予定${st.plans}件`);
+      return`<details class="cult"${i===0?' open':''}><summary><b>${esc(P.date.slice(0,4))}年 ${md(P.date)} ${esc(P.how||'作付け')}</b>${P.variety?'（'+esc(P.variety)+'）':''}<div class="dd">${sum.join('／')}</div></summary><div class="cbody">${recHTML(P,true)}${c.ev.map(r=>recHTML(r,true,P.date)).join('')}</div></details>`}).join('')}
+   </div>`;
+  hydrate(root);
+}
+
+/* ---------- 四国中央市の適期 ---------- */
+// 旬の番号：1月上旬=0 … 12月下旬=35
+const jun=(m,d)=>(m-1)*3+(d<=10?0:d<=20?1:2);
+const parseJun=t=>{const m=t.match(/(\d+)(上|中|下)-(\d+)(上|中|下)/),k={上:0,中:1,下:2};return[(+m[1]-1)*3+k[m[2]],(+m[3]-1)*3+k[m[4]]]};
+const inJun=(j,[a,b])=>a<=b?(j>=a&&j<=b):(j>=a||j<=b);
+const junText=t=>t.replace(/-/g,'〜').replace(/(\d+)(上|中|下)/g,(_,m,k)=>m+'月'+k+'旬');
+// s：根拠　愛＝愛媛県の資料の時期を含む／全＝全国向けの資料（関東以西の平野部が基準）と一致／推＝四国中央の気温から推定した一般的な目安
+const SEASON=[
+ {n:'トマト',sow:['2下-3下'],plant:['4下-5下'],s:'全'},
+ {n:'ナス',sow:['2中-3中'],plant:['4下-5下'],s:'全'},
+ {n:'キュウリ',sow:['4上-6上'],plant:['4下-5下'],s:'愛'},
+ {n:'ピーマン',sow:['2下-3下'],plant:['4下-5下'],s:'全'},
+ {n:'スイカ',sow:['3中-4上'],plant:['4中-5中'],s:'愛'},
+ {n:'カボチャ',sow:['4上-5中'],plant:['4下-5下'],s:'全'},
+ {n:'ズッキーニ',sow:['4上-5中'],plant:['4下-5下'],s:'推'},
+ {n:'スイートコーン',sow:['4上-6上'],plant:['5中-6中'],s:'愛'},
+ {n:'エダマメ',sow:['4下-6下'],plant:[],s:'全'},
+ {n:'オクラ',sow:['4下-5下'],plant:[],s:'全'},
+ {n:'インゲン',sow:['4上-5下','9上-9中'],plant:[],s:'推'},
+ {n:'サツマイモ',sow:[],plant:['5上-6上'],s:'愛'},
+ {n:'サトイモ',sow:[],plant:['4上-5上'],s:'全'},
+ {n:'ジャガイモ',sow:[],plant:['2中-3下','8下-9上'],s:'全'},
+ {n:'ニンジン',sow:['3中-4中','7中-8中'],plant:[],s:'推'},
+ {n:'ダイコン',sow:['9上-10中'],plant:[],s:'全'},
+ {n:'カブ',sow:['3上-4中','9中-10下'],plant:[],s:'推'},
+ {n:'ハクサイ',sow:['8下-9中'],plant:['9上-10上'],s:'全'},
+ {n:'キャベツ',sow:['8中-9上','10上-10下'],plant:['9上-9下','11上-12上'],s:'愛'},
+ {n:'ブロッコリー',sow:['8中-9下'],plant:['9下-10下'],s:'愛'},
+ {n:'ホウレンソウ',sow:['3上-4中','9下-11中'],plant:[],s:'推'},
+ {n:'コマツナ',sow:['3上-5下','9上-10下'],plant:[],s:'愛'},
+ {n:'レタス',sow:['2中-3上','9上-10上'],plant:['3中-4上','10上-11上'],s:'推'},
+ {n:'シュンギク',sow:['3上-4中','9中-11上'],plant:[],s:'推'},
+ {n:'ネギ',sow:['3上-4中'],plant:['5上-7中'],s:'全'},
+ {n:'タマネギ',sow:['9下-10中'],plant:['11上-12中'],s:'愛'},
+ {n:'ニンニク',sow:[],plant:['9下-10下'],s:'推'},
+ {n:'エンドウ',sow:['10下-11中'],plant:[],s:'推'},
+ {n:'ソラマメ',sow:['10下-11中'],plant:[],s:'推'},
+ {n:'イチゴ',sow:[],plant:['10上-11上'],s:'全'},
+ {n:'ゴボウ',sow:['3中-4下','9下-10中'],plant:[],s:'推'}
+];
+const CLIMATE={max:[9.3,10.0,13.6,19.3,24.2,26.8,31.0,32.2,28.1,22.6,17.0,11.8],avg:[5.9,6.2,9.3,14.4,19.3,22.7,26.9,27.9,24.1,18.6,13.2,8.3],min:[2.6,2.6,5.2,9.9,14.8,19.3,23.5,24.4,20.7,15.0,9.5,5.0],rain:[44.9,56.2,94.9,89.2,113.2,175.8,198.7,162.6,232.5,142.5,69.5,64.5]};
+function seasonFor(name){const c=findCrop(name),k=kata(c?c.n:name);return SEASON.find(x=>kata(x.n)===k)||null}
+function seasonKinds(x,j){return{sow:x.sow.some(w=>inJun(j,parseJun(w))),plant:x.plant.some(w=>inJun(j,parseJun(w)))}}
+const nowJun=()=>{const d=new Date();return jun(d.getMonth()+1,d.getDate())};
+function nowOkHTML(names){
+  const j=nowJun(),list=[];
+  for(const n of names){const x=seasonFor(n);if(!x)continue;const k=seasonKinds(x,j);if(k.sow||k.plant)list.push(x.n+(k.sow&&k.plant?'（播種・定植）':k.sow?'（播種）':'（定植）'))}
+  const uniq=[...new Set(list)];
+  return`<p class="sub" style="margin:8px 0 2px">今（${Math.floor(j/3)+1}月${['上','中','下'][j%3]}旬）が四国中央市の適期で、連作の面でも問題ない作物</p><div class="nowlist">${uniq.length?esc(uniq.join('、')):'いまの時期に植えられる作物のデータはありません'}</div>`;
+}
+function updateSeason(){
+  const box=$('#f-season');
+  if($('#f-type').value!=='plant'){box.hidden=true;return}
+  const crop=$('#f-crop').value.trim(),how=$('#f-how').value,date=$('#f-date').value,x=crop&&date&&seasonFor(crop);
+  if(!x){box.hidden=true;return}
+  const j=jun(+date.slice(5,7),+date.slice(8,10)),k=seasonKinds(x,j);
+  const txt=[x.sow.length?'播種：'+x.sow.map(junText).join('、'):'',x.plant.length?'定植・植え付け：'+x.plant.map(junText).join('、'):''].filter(Boolean).join('／');
+  let ok=k.sow||k.plant;
+  if(how==='播種'&&x.sow.length)ok=k.sow;
+  else if((how==='定植'||how==='植え付け')&&x.plant.length)ok=k.plant;
+  box.className='rotbox '+(ok?'ok':'bad');
+  box.textContent=ok?`✓ 四国中央市の適期です（${txt}）`:`⚠ 四国中央市の適期から外れています。目安は ${txt} です。`;
+  box.hidden=false;
+}
+function areaCardHTML(){
+  const now=new Date(),mm=now.getMonth()+1,j=nowJun();
+  const sowN=[],plN=[];
+  for(const x of SEASON){const k=seasonKinds(x,j);if(k.sow)sowN.push(x.n);if(k.plant)plN.push(x.n)}
+  const cell=(x,m)=>{const idx=[0,1,2].map(i=>(m-1)*3+i),sw=idx.some(i=>x.sow.some(w=>inJun(i,parseJun(w)))),pl=idx.some(i=>x.plant.some(w=>inJun(i,parseJun(w))));return(sw?'<span class="k1">播</span>':'')+(pl?'<span class="k2">植</span>':'')};
+  const hd=cur=>Array.from({length:12},(_,i)=>`<th${i+1===mm?' class="cur"':''}>${i+1}</th>`).join('');
+  return`<div class="card"><h2>四国中央市の栽培カレンダー</h2>
+   <div class="sub">いま（${mm}月${['上','中','下'][j%3]}旬）が時期の作物</div>
+   <p class="nowlist"><b>播種</b>：${esc(sowN.join('、')||'—')}</p>
+   <p class="nowlist"><b>定植・植え付け</b>：${esc(plN.join('、')||'—')}</p>
+   <h3>月ごとの適期（播＝種まき、植＝苗や種芋の植え付け）</h3>
+   <div class="mwrap"><table class="mtab"><thead><tr><th class="rl">作物</th>${hd()}</tr></thead><tbody>${SEASON.map(x=>`<tr><td class="rl">${esc(x.n)}<small>${x.s}</small></td>${Array.from({length:12},(_,i)=>`<td${i+1===mm?' class="cur"':''}>${cell(x,i+1)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+   <div class="dd">根拠　愛＝愛媛県の資料の時期を含む／全＝全国向けの資料と一致／推＝四国中央の気温から推定した一般的な目安</div>
+   <h3>四国中央市の気候（1991〜2020年の平年値）</h3>
+   <div class="mwrap"><table class="mtab num"><thead><tr><th class="rl"></th>${hd()}</tr></thead><tbody>
+    <tr><td class="rl">最高 ℃</td>${CLIMATE.max.map(v=>`<td>${v}</td>`).join('')}</tr>
+    <tr><td class="rl">平均 ℃</td>${CLIMATE.avg.map(v=>`<td>${v}</td>`).join('')}</tr>
+    <tr><td class="rl">最低 ℃</td>${CLIMATE.min.map(v=>`<td>${v}</td>`).join('')}</tr>
+    <tr><td class="rl">雨 mm</td>${CLIMATE.rain.map(v=>`<td>${Math.round(v)}</td>`).join('')}</tr></tbody></table></div>
+   <div class="dd">年平均気温 16.4℃　年降水量 約1,444mm</div>
+   <h3>この地域の栽培の注意</h3>
+   <ul class="plain">
+    <li><b>冬は温暖</b>：1月の平均気温は5.9℃、最低気温の平均は2.6℃です。最低気温が0℃未満になる冬日は年10日未満（気象庁の資料）なので、海沿いの平地では霜の害は少なめです。ただし晴れて風のない朝は霜が降りることがあります。山あいはもっと冷えます。初霜・終霜の平年日は、公式の資料が見つかりませんでした。</li>
+    <li><b>夏は暑い</b>：7〜8月は平均27〜28℃、最高31〜32℃です。この時期の葉もの（ホウレンソウ・レタスなど）の種まきや、結球野菜の苗の植え付けは向きません。トマトなどは高温で実がつきにくくなることがあります。</li>
+    <li><b>雨は6月・7月・9月が多い</b>（6月176mm、7月199mm、9月233mm）：梅雨と秋雨・台風の時期は、畝の水はけと病気に注意してください。</li>
+    <li><b>冬は雨が少ない</b>（12〜2月は45〜65mm）：冬越しの野菜（タマネギ、エンドウ、ソラマメなど）は、乾燥が続くときに水やりをしてください。</li>
+    <li>同じ市内でも、海沿いか山あいかで気温が違います。畑の場所に合わせて、予定の日付を直してください。</li></ul>
+   <p class="note">出典：
+    <a href="https://weather.time-j.net/climate/chart/shikokuchuo" target="_blank" rel="noopener">四国中央の気候（気象庁アメダスの平年値）</a>、
+    <a href="https://www.data.jma.go.jp/matsuyama/tokusei/kishou_tokusei.html" target="_blank" rel="noopener">愛媛県の気候（松山地方気象台）</a>、
+    <a href="https://www.pref.ehime.jp/uploaded/attachment/26305.pdf" target="_blank" rel="noopener">愛媛県 有機農業に取り組んでみませんか（野菜編）</a>、
+    <a href="https://www.pref.ehime.jp/uploaded/attachment/121385.pdf" target="_blank" rel="noopener">愛媛県 魅力発信！えひめ農業（令和6年5月）</a>、
+    <a href="https://www.yanmar.com/jp/agri/agrilife/kitchen_garden/field/" target="_blank" rel="noopener">ヤンマー 家庭菜園</a>、
+    <a href="https://www.honda.co.jp/tiller/yasai/howto/planning/season/" target="_blank" rel="noopener">ホンダ 家庭菜園の栽培計画</a>。
+    四国中央市だけの野菜の栽培暦は公開資料に見つかりませんでした。愛媛県の資料の一部は、表から読み取った概算です。あなたの経験と違うところは、教えてもらえれば直します。</p></div>`;
+}
+
+/* ---------- 同期（Supabase） ---------- */
+const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}):null;
+let session=null,syncing=false,again=false,syncT=0,chipState='',chipMsg='',lastSync=0;
+const hhmm=t=>{const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes())};
+const iso=u=>new Date(u).toISOString();
+function renderSync(){
+  const on=!!session,c=$('#syncChip');
+  let t;
+  if(!sb)t='同期なし';else if(!on)t='ローカルのみ';else if(chipState==='busy')t='⟳ 同期中…';else if(chipState==='err')t='⚠ 未同期';else t='☁ 同期済み'+(lastSync?' '+hhmm(lastSync):'');
+  c.textContent=t;c.classList.toggle('err',on&&chipState==='err');
+  $('#sy-form').hidden=on||!sb;$('#sy-on').hidden=!on;
+  $('#sy-status').textContent=!sb?'同期の部品を読み込めませんでした。ネットにつないで開き直してください。':on?`ログイン中：${session.user.email}${lastSync?'／最終同期 '+hhmm(lastSync):''}${chipState==='err'&&chipMsg?'／'+chipMsg:''}`:'ログインすると、スマホとPCでデータが同期されます。ログインしなくても、この端末の中だけで使えます。';
+}
+function setChip(st,msg){chipState=st;chipMsg=msg||'';renderSync()}
+function schedSync(ms=2500){if(!sb||!session)return;clearTimeout(syncT);syncT=setTimeout(sync,ms)}
+function errText(e){const m=String((e&&e.message)||e||'');return/fetch|network|load failed/i.test(m)?'通信できません（あとで自動で再試行します）':m}
+async function sync(){
+  if(!sb||!session)return;
+  if(syncing){again=true;return}
+  if(!navigator.onLine){setChip('err','オフラインです');return}
+  syncing=true;setChip('busy');let changed=false;
+  try{
+    const uid=session.user.id;
+    // 1. サーバーの記録を取得
+    const remote=new Map();
+    for(let from=0;;from+=1000){
+      const{data,error}=await sb.from('garden_records').select('id,data,deleted,updated_at').order('id').range(from,from+999);
+      if(error)throw error;
+      for(const row of data)remote.set(row.id,{id:row.id,data:row.data,deleted:row.deleted,u:Date.parse(row.updated_at)});
+      if(data.length<1000)break}
+    // 2. 新しいほうを採用して取り込む
+    for(const[id,R]of remote){
+      const L=S.records.find(x=>x.id===id),T=S.tomb[id];
+      if(R.deleted){
+        if(L&&L.u>R.u)continue;
+        if(L){S.records=S.records.filter(x=>x.id!==id);changed=true}
+        if((T||0)<R.u)S.tomb[id]=R.u;
+      }else{
+        if(T&&T>=R.u)continue;
+        if(!L||R.u>L.u){const rec={...R.data,u:R.u};if(L)S.records[S.records.indexOf(L)]=rec;else S.records.push(rec);delete S.tomb[id];changed=true}
+      }}
+    // 畝の形
+    const{data:bd,error:be}=await sb.from('garden_beds').select('data,updated_at').maybeSingle();
+    if(be)throw be;
+    const bu=bd?Date.parse(bd.updated_at):0;
+    if(bd&&bu>S.bu&&!editMode&&bd.data&&Array.isArray(bd.data.beds)){S.beds=bd.data.beds;S.bu=bu;changed=true}
+    // 3. 自分のほうが新しいものを送る
+    const rows=[];
+    for(const r of S.records){const R=remote.get(r.id);if(!R||r.u>R.u)rows.push({user_id:uid,id:r.id,data:r,deleted:false,updated_at:iso(r.u)})}
+    for(const[id,u]of Object.entries(S.tomb)){const R=remote.get(id);if(!R||u>R.u)rows.push({user_id:uid,id,data:{},deleted:true,updated_at:iso(u)})}
+    for(let i=0;i<rows.length;i+=200){const{error}=await sb.from('garden_records').upsert(rows.slice(i,i+200),{onConflict:'user_id,id'});if(error)throw error}
+    if(S.bu>bu){const{error}=await sb.from('garden_beds').upsert({user_id:uid,data:{beds:S.beds},updated_at:iso(S.bu)},{onConflict:'user_id'});if(error)throw error}
+    // 4. 写真
+    for(const r of S.records)for(const id of r.photos||[]){
+      if(S.up[id])continue;const b=await getLocalPhoto(id);if(!b)continue;
+      const{error}=await sb.storage.from('photos').upload(uid+'/'+id+'.jpg',b,{contentType:'image/jpeg',upsert:true});
+      if(error)throw error;S.up[id]=1;persist()}
+    if(S.pdel.length){const ids=[...new Set(S.pdel)],{error}=await sb.storage.from('photos').remove(ids.map(i=>uid+'/'+i+'.jpg'));if(error)throw error;S.pdel=[]}
+    persist();lastSync=Date.now();setChip('ok');
+    if(changed)renderAll();
+  }catch(e){setChip('err',errText(e))}
+  finally{syncing=false;if(again){again=false;schedSync(500)}}
+}
+async function initAuth(){
+  renderSync();if(!sb)return;
+  try{const{data}=await sb.auth.getSession();session=data.session}catch(e){}
+  sb.auth.onAuthStateChange((ev,s)=>{session=s;setTimeout(()=>{renderSync();if(s)sync()},0)});
+  renderSync();if(session)sync();
+  addEventListener('online',()=>schedSync(500));
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedSync(500)});
+  setInterval(()=>{if(!document.hidden)schedSync(100)},5*60e3);
+}
+$('#sy-form').addEventListener('submit',async e=>{
+  e.preventDefault();const em=$('#sy-mail').value.trim(),pw=$('#sy-pass').value;if(!em||!pw||!sb)return;
+  $('#sy-go').disabled=true;
+  let error=null;try{({error}=await sb.auth.signInWithPassword({email:em,password:pw}))}catch(x){error=x}
+  $('#sy-go').disabled=false;
+  if(error)return toast(/Invalid login/i.test(error.message||'')?'メールアドレスかパスワードが違います':'ログインできませんでした：'+errText(error));
+  $('#sy-pass').value='';toast('ログインしました');
+});
+$('#sy-now').onclick=()=>{clearTimeout(syncT);sync().then(()=>{if(chipState==='ok')toast('同期しました')})};
+$('#sy-out').onclick=async()=>{if(!await ask('ログアウトします。この端末のデータは残ります。'))return;try{await sb.auth.signOut()}catch(e){}session=null;chipState='';renderSync();toast('ログアウトしました')};
+$('#syncChip').onclick=()=>{showView('data');if(session)schedSync(100)};
+
 /* ---------- 初期化 ---------- */
 $('#f-type').innerHTML=Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('');
 $('#l-type').innerHTML='<option value="">すべての種類</option>'+Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
 $('#l-type').onchange=$('#l-bed').onchange=renderLog;
 $('#today').textContent=full(today());
-renderRot();renderAll();
+renderRot();renderAll();initAuth();
+if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();
 </script>
 </body>
