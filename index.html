@@ -139,6 +139,8 @@ details.cult .cbody{padding:0 12px 10px}
 .mtab td.rl small{color:var(--sub);margin-left:3px}
 .mtab.num td,.mtab.num th{min-width:30px;font-size:11px}
 .nowlist{font-size:14px;margin:4px 0}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+#f-type option:disabled{color:#999}
 </style>
 </head>
 <body>
@@ -227,6 +229,7 @@ details.cult .cbody{padding:0 12px 10px}
       <label>種類<select id="f-type"></select></label>
       <label>日付<input type="date" id="f-date" required></label>
     </div>
+    <div id="f-typehint" class="rotbox bad" hidden></div>
     <label class="chk"><input type="checkbox" id="f-plan"> 予定として登録（まだ実施していない）</label>
     <fieldset><legend>対象の畝</legend><div id="f-beds" class="chips"></div></fieldset>
     <label data-t="plant harvest">作物<input type="text" id="f-crop" list="dl-crops" autocomplete="off"></label>
@@ -236,8 +239,8 @@ details.cult .cbody{padding:0 12px 10px}
     <label data-t="plant">方法<select id="f-how"><option value="">（指定なし）</option><option value="播種">播種（種をまく）</option><option value="定植">定植（苗を植える）</option><option value="植え付け">植え付け（種芋・球根など）</option></select></label>
     <label data-t="plant">収穫予定日<input type="date" id="f-harvestPlan"></label>
     <div data-t="plant" id="f-af-box"><label class="chk"><input type="checkbox" id="f-af"> 追肥の予定を自動で入れる（目安）</label><div id="f-afprev" class="note"></div></div>
-    <label data-t="fert spray">資材名<input type="text" id="f-material" list="dl-mats" autocomplete="off"></label>
-    <label data-t="fert harvest">量<input type="text" id="f-amount" placeholder="例: 100g/㎡、3kg" autocomplete="off"></label>
+    <label data-t="fert spray soil">資材名<input type="text" id="f-material" list="dl-mats" autocomplete="off"></label>
+    <label data-t="fert harvest soil">量<input type="text" id="f-amount" placeholder="例: 100g/㎡、3kg" autocomplete="off"></label>
     <div class="row" data-t="spray">
       <label>希釈倍数<input type="number" id="f-dilution" inputmode="decimal" min="0" placeholder="例: 1000"></label>
       <label>収穫前日数（日）<input type="number" id="f-phi" inputmode="numeric" min="0" placeholder="例: 7"></label>
@@ -284,10 +287,12 @@ const DEFAULT_BEDS=[
  {id:'4-2',area:2, pts:[[757,279],[813,310],[840,263],[784,231]]},
  {id:'4-3',area:2, pts:[[731,326],[785,358],[813,310],[757,279]]},
  {id:'4-4',area:2, pts:[[705,373],[758,410],[785,358],[731,326]]},
- {id:'5-1',area:4, pts:[[244,999],[299,975],[329,1043],[343,1080],[287,1101]]}
+ {id:'5-1',area:4, pts:[[244,999],[299,975],[329,1043],[343,1080],[287,1101]]},
+ {id:'6-1',area:2, pts:[[760,680],[800.3,680],[800.3,760.6],[760,760.6]]},
+ {id:'6-2',area:2, pts:[[800.3,680],[840.6,680],[840.6,760.6],[800.3,760.6]]}
 ];
 const TYPES={
- plant:{label:'作付け',icon:'🌱'},fert:{label:'施肥',icon:'🧪'},spray:{label:'農薬散布',icon:'💧'},
+ soil:{label:'土づくり',icon:'⛏️'},plant:{label:'作付け',icon:'🌱'},fert:{label:'施肥',icon:'🧪'},spray:{label:'農薬散布',icon:'💧'},
  harvest:{label:'収穫',icon:'🧺'},clear:{label:'片付け',icon:'🧹'},memo:{label:'メモ',icon:'📝'}
 };
 const FIELDS=['crop','variety','how','harvestPlan','material','amount','dilution','target','phi','memo'];
@@ -373,6 +378,12 @@ if(!Array.isArray(S.pdel))S.pdel=[];              // サーバーから消す写
 if(typeof S.bu!=='number')S.bu=0;                 // 畝の形を変えた時刻
 {const t0=Date.now();for(const r of S.records)if(typeof r.u!=='number')r.u=t0;
  if(!S.bu&&JSON.stringify(S.beds)!==JSON.stringify(DEFAULT_BEDS))S.bu=t0}
+if(!S.add62){S.add62=true;   // 6-1・6-2（1m×2m）を一度だけ追加
+ const have=new Set(S.beds.map(b=>b.id)),add=DEFAULT_BEDS.filter(b=>/^6-/.test(b.id)&&!have.has(b.id));
+ if(add.length){S.beds=S.beds.concat(clone(add));S.bu=Date.now()}}
+if(!S.add62b){S.add62b=true;   // 6-2を6-1の隣にくっつける（移動していない場合のみ）
+ const b2=S.beds.find(b=>b.id==='6-2'),n2=DEFAULT_BEDS.find(b=>b.id==='6-2');
+ if(b2&&JSON.stringify(b2.pts)==='[[830,680],[870.3,680],[870.3,760.6],[830,760.6]]'){b2.pts=clone(n2.pts);S.bu=Date.now()}}
 const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
 const save=()=>{persist();schedSync()};
 const getBed=id=>S.beds.find(b=>b.id===id);
@@ -411,8 +422,17 @@ function bedInfo(id){
   if(cur)for(const r of rs){if(r.type==='spray'&&r.date>=cur.date&&r.phi!==''&&r.phi!=null){const x=addDays(r.date,+r.phi);if(!safeOn||x>safeOn)safeOn=x}}
   return{cur,fert:last('fert'),spray:last('spray'),safeOn};
 }
+/* 指定した日付の時点で、畝に作物が植わっているか（editIdの記録は無視） */
+function curAt(bedId,date,editId){
+  let cur=null;
+  const rs=S.records.filter(r=>!r.plan&&r.id!==editId&&r.beds.includes(bedId)&&(r.type==='plant'||r.type==='clear')&&r.date<=date).sort(byDate);
+  for(const r of rs){cur=r.type==='plant'?r:null}
+  return cur;
+}
+const PRE=['soil','plant'];   // 作付け以前の種類
 function title(r){switch(r.type){
   case'plant':return(r.crop||'作付け')+(r.variety?'（'+r.variety+'）':'')+' '+(r.how||'作付け');
+  case'soil':return'土づくり：'+(r.material||'—')+(r.amount?' '+r.amount:'');
   case'fert':return'施肥：'+(r.material||'—')+(r.amount?' '+r.amount:'');
   case'spray':return'散布：'+(r.material||'—')+(r.dilution?' '+r.dilution+'倍':'');
   case'harvest':return'収穫：'+(r.crop||'')+(r.amount?' '+r.amount:'');
@@ -590,7 +610,7 @@ function renderDetail(){
   else if(i.safeOn)bd.push('<span class="badge">収穫制限なし</span>');
   d.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><div><h2>畝 ${esc(b.id)}</h2><div class="sub">${fmtA(b.area)}</div></div><button class="btn sm" id="d-back">一覧へ</button></div>
    <p style="margin:8px 0 0">${cur}</p><div class="badges">${bd.join('')}</div>
-   <div class="quick">${['plant','fert','spray','harvest','clear'].map(k=>`<button class="btn" data-quick="${k}">${TYPES[k].icon} ${TYPES[k].label}</button>`).join('')}</div>
+   <div class="quick">${['soil','plant','fert','spray','harvest','clear'].map(k=>{const off=i.cur&&PRE.includes(k);return`<button class="btn" data-quick="${k}"${off?' disabled title="作付け済みの畝では選べません"':''}>${TYPES[k].icon} ${TYPES[k].label}</button>`}).join('')}</div>
    ${rotationHTML(sel)}
    ${plans.length?`<h3>この畝の予定</h3>${plans.map(r=>recHTML(r,true)).join('')}`:''}
    <h3>履歴</h3>${hist.length?hist.map(r=>recHTML(r,true)).join(''):'<p class="sub">まだ記録がありません。上のボタンから追加できます。</p>'}`;
@@ -723,6 +743,16 @@ svgEl.addEventListener('pointerup',e=>{if(!splitMode||!drag)return;drag=false;cu
 
 /* ---------- 入力フォーム ---------- */
 let editing=null,keep=[],pend=[];
+function busyBeds(){const d=$('#f-date').value||today();return selBeds().filter(id=>curAt(id,d,editing&&editing.id))}
+function updateTypes(){
+  const busy=busyBeds(),opt=[...$('#f-type').options];
+  for(const o of opt)o.disabled=busy.length>0&&PRE.includes(o.value);
+  const cur=$('#f-type');
+  if(cur.selectedOptions[0]&&cur.selectedOptions[0].disabled){cur.value='fert';syncFields()}
+  const h=$('#f-typehint');
+  h.hidden=!busy.length;
+  h.textContent=busy.length?`畝 ${busy.join('・')} は作付け済みのため、土づくり・作付けは選べません。新しく植えるときは、先に「片付け」を記録してください。`:'';
+}
 const selBeds=()=>[...document.querySelectorAll('#f-beds input:checked')].map(i=>i.value);
 function syncFields(){const t=$('#f-type').value;document.querySelectorAll('#f [data-t]').forEach(e=>{e.hidden=!e.dataset.t.split(' ').includes(t)})}
 function renderFormPhotos(){
@@ -740,8 +770,9 @@ function openForm(rec,preset){
   const ids=new Set(active().map(b=>b.id));for(const id of r.beds)ids.add(id);
   $('#f-beds').innerHTML=S.beds.filter(b=>ids.has(b.id)).map(b=>`<label class="chip"><input type="checkbox" value="${esc(b.id)}"${r.beds.includes(b.id)?' checked':''}><span>${esc(bedLabel(b.id))}</span></label>`).join('');
   $('#f-del').hidden=!rec;
-  syncFields();renderFormPhotos();
+  syncFields();renderFormPhotos();updateTypes();
   $('#f-af').checked=rec?!!rec.af:true;
+  if(preset&&preset.crop&&!rec&&!$('#f-crop').value)$('#f-crop').value=preset.crop;
   if(r.type==='harvest')prefillCrop();
   updateRot();updateAf();updateSeason();
   $('#dlg').showModal();
@@ -750,7 +781,8 @@ function prefillCrop(){if($('#f-crop').value)return;const b=selBeds()[0],c=b&&be
 $('#f-type').addEventListener('change',()=>{syncFields();if($('#f-type').value==='harvest')prefillCrop();updateRot()});
 $('#f-crop').addEventListener('input',updateRot);
 $('#f-date').addEventListener('change',updateRot);
-$('#f-beds').addEventListener('change',updateRot);
+$('#f-beds').addEventListener('change',()=>{updateTypes();updateRot();updateAf();updateSeason()});
+$('#f-date').addEventListener('change',updateTypes);
 $('#f-crop').addEventListener('input',updateAf);$('#f-how').addEventListener('change',updateAf);$('#f-date').addEventListener('change',updateAf);$('#f-af').addEventListener('change',updateAf);$('#f-type').addEventListener('change',updateAf);
 $('#f-crop').addEventListener('input',updateSeason);$('#f-how').addEventListener('change',updateSeason);$('#f-date').addEventListener('change',updateSeason);$('#f-type').addEventListener('change',updateSeason);
 $('#f-file').addEventListener('change',async e=>{
@@ -767,6 +799,8 @@ $('#f').addEventListener('submit',async e=>{
   e.preventDefault();
   const type=$('#f-type').value,beds=selBeds();
   if(!beds.length)return toast('畝を選んでください');
+  if(PRE.includes(type)){const d=$('#f-date').value||today(),bz=beds.filter(id=>curAt(id,d,editing&&editing.id));
+    if(bz.length)return toast('畝 '+bz.join('・')+' は作付け済みです。先に片付けを記録してください');}
   if(type==='plant'&&!$('#f-crop').value.trim())return toast('作物名を入力してください');
   const r={id:editing?editing.id:uid(),type,date:$('#f-date').value||today(),plan:$('#f-plan').checked,beds:S.beds.map(b=>b.id).filter(id=>beds.includes(id))};
   for(const k of FIELDS){const el=$('#f-'+k),w=el.closest('[data-t]');r[k]=(!w||w.dataset.t.split(' ').includes(type))?el.value.trim():''}
@@ -802,7 +836,8 @@ document.addEventListener('click',e=>{
     openForm(r);if(a.dataset.act==='done'){$('#f-plan').checked=false;$('#f-date').value=today()}return}
   const cb=e.target.closest('[data-crop]');if(cb){cropSel=cb.dataset.crop;renderCrop();return}
   const th=e.target.closest('img.thumb');if(th&&th.src){$('#viewer img').src=th.src;$('#viewer').hidden=false;return}
-  const q=e.target.closest('[data-quick]');if(q){openForm(null,{type:q.dataset.quick,beds:sel?[sel]:[]});return}
+  const ad=e.target.closest('[data-addto]');if(ad){const P=S.records.find(x=>x.id===ad.dataset.addto);if(P)openForm(null,{type:'fert',beds:P.beds.slice(),crop:P.crop});return}
+  const q=e.target.closest('[data-quick]');if(q){if(q.disabled)return;openForm(null,{type:q.dataset.quick,beds:sel?[sel]:[]});return}
   if(e.target.closest('#d-back')){pick(null);return}
   const tr=e.target.closest('tr[data-bed]');if(tr&&!editMode)pick(tr.dataset.bed);
 });
@@ -930,7 +965,7 @@ function fertCardHTML(){
 
 /* ---------- 作物別の履歴 ---------- */
 let cropSel=null;
-const ICON={plant:'🌱',fert:'🧪',spray:'💧',harvest:'🧺',clear:'🧹',memo:'📝'};
+const ICON={soil:'⛏️',plant:'🌱',fert:'🧪',spray:'💧',harvest:'🧺',clear:'🧹',memo:'📝'};
 function buildCults(){
   const all=S.records,done=all.filter(r=>!r.plan);
   const plants=done.filter(r=>r.type==='plant').sort(byDate);
@@ -956,7 +991,7 @@ function buildCults(){
     if(r.beds.some(b=>c.P.beds.includes(b)&&(!c.ends[b]||r.date<c.ends[b].date||(r.date===c.ends[b].date&&c.ends[b].incl)))){c.ev.push(r);inMain.add(r.id)}
   }
   for(const c of cults)for(const r of all){   // 作付け前3週間の施肥・散布（基肥など）
-    if(inMain.has(r.id)||r.type==='plant'||r.type==='harvest'||r.type==='clear'||r.date>=c.P.date||dd(c.P.date,r.date)>21)continue;
+    if(inMain.has(r.id)||r.type==='plant'||r.type==='harvest'||r.type==='clear'||r.date>=c.P.date||dd(c.P.date,r.date)>(r.type==='soil'?60:21))continue;
     if(r.beds.some(b=>c.P.beds.includes(b)))c.ev.push(r);
   }
   for(const c of cults)c.ev.sort(byDate);
@@ -971,7 +1006,7 @@ function monthRow(c,cm){
   const cells=Array.from({length:12},()=>new Map());
   const add=(r,pl)=>{cells[+r.date.slice(5,7)-1].set(r.type+(pl?'*':''),1)};
   add(c.P,false);for(const r of c.ev)add(r,r.plan);
-  const order=['plant','fert','spray','harvest','clear','memo'];
+  const order=['soil','plant','fert','spray','harvest','clear','memo'];
   return`<tr><td class="rl">${esc(c.P.date.slice(0,4))} ${esc(c.P.beds.join('・'))}</td>${cells.map((m,i)=>`<td${i+1===cm?' class="cur"':''}>${order.map(k=>m.has(k)?`<span>${ICON[k]}</span>`:'').join('')}${order.map(k=>m.has(k+'*')?`<span class="pl">${ICON[k]}</span>`:'').join('')}</td>`).join('')}</tr>`;
 }
 function renderCrop(){
@@ -988,12 +1023,12 @@ function renderCrop(){
     <div class="sub">${list.length}回の栽培（${years[0]}${years.length>1?'〜'+years[years.length-1]:''}年）</div>
     <h3>月ごとの作業（年ごとの比較）</h3>
     <div class="mwrap"><table class="mtab"><thead><tr><th class="rl"></th>${Array.from({length:12},(_,i)=>`<th${i+1===cm?' class="cur"':''}>${i+1}</th>`).join('')}</tr></thead><tbody>${list.map(c=>monthRow(c,cm)).join('')}</tbody></table></div>
-    <div class="dd">🌱作付け　🧪施肥　💧散布　🧺収穫　🧹片付け（薄い表示は予定）</div>
+    <div class="dd">⛏️土づくり　🌱作付け　🧪施肥　💧散布　🧺収穫　🧹片付け（薄い表示は予定）</div>
     <h3>栽培ごとの記録</h3>
     ${list.map((c,i)=>{const st=cultStats(c),P=c.P;
       const sum=[`畝 ${P.beds.map(bedLabel).join('・')}`,st.firstH?`初収穫 ${md(st.firstH.date)}（${dd(st.firstH.date,P.date)}日目）`:'収穫の記録なし',`施肥${st.fert}回`,`散布${st.spray}回`,st.clear?`片付け ${md(st.clear.date)}`:'栽培中'];
       if(st.plans)sum.push(`予定${st.plans}件`);
-      return`<details class="cult"${i===0?' open':''}><summary><b>${esc(P.date.slice(0,4))}年 ${md(P.date)} ${esc(P.how||'作付け')}</b>${P.variety?'（'+esc(P.variety)+'）':''}<div class="dd">${sum.join('／')}</div></summary><div class="cbody">${recHTML(P,true)}${c.ev.map(r=>recHTML(r,true,P.date)).join('')}</div></details>`}).join('')}
+      return`<details class="cult"${i===0?' open':''}><summary><b>${esc(P.date.slice(0,4))}年 ${md(P.date)} ${esc(P.how||'作付け')}</b>${P.variety?'（'+esc(P.variety)+'）':''}<div class="dd">${sum.join('／')}</div></summary><div class="cbody">${st.clear?'':`<button class="btn sm pri" data-addto="${P.id}">＋ この栽培に記録を追加</button>`}${recHTML(P,true)}${c.ev.map(r=>recHTML(r,true,P.date)).join('')}</div></details>`}).join('')}
    </div>`;
   hydrate(root);
 }
