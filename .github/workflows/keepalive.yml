@@ -1,0 +1,13 @@
+name: keepalive
+on:
+  schedule:
+    - cron: '0 0 * * 1,4'   # 毎週 月・木 の 9:00（日本時間）
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Supabaseにアクセス
+        run: |
+          curl -fsS "https://dlxqghghtuowoanutklw.supabase.co/rest/v1/keepalive?select=id&limit=1" \
+            -H "apikey: sb_publishable_xyH6VUhrmehKjlDTdpHaQQ_ylA45hEf"
